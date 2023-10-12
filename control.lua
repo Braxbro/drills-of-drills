@@ -4,8 +4,8 @@
 ---@diagnostic disable: missing-fields
 local hasStarted = false
 
-local minimumMiningTime = {}
-local minimumMiningTimeTarget = {}
+local minimumMiningTime = global.minimumMiningTime
+local minimumMiningTimeTarget = global.minimumMiningTimeTarget
 
 local function addDrillsOfDrills(data)
     local drill = data.created_entity
@@ -142,6 +142,8 @@ local function startup(data)
     global.drills = {}
     global.drillNames = {}
     global.speedLimit = {}
+    global.minimumMiningTime = {}
+    global.minimumMiningTime = {}
     global.destroyedDrills = {}
     global.overcapShapes = {}
     do -- Create a global lookup table for the drills of drills unlocked by a given technology.
