@@ -63,7 +63,7 @@ for name, _ in pairs(drills) do
 end
 
 for _, recipe in pairs(data.raw["recipe"]) do
-    recipe.enabled = recipe.enabled == nil and true or false
+    recipe.enabled = recipe.enabled ~= false and true or false
     if recipe.enabled then
         if recipe.normal or recipe.expensive then
             recipe.normal = recipe.normal or recipe.expensive
