@@ -1,0 +1,12 @@
+---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 2023-10-12
+  Info:
+    - First release of Drill of Drills.
+  Major Features:
+    - Drills of drills for each drill.
+      Drills with mining areas smaller than their footprint are excluded.
+      Drills that mine more than 60 outputs per second are excluded and will not be created.
+    - Drills of drills unlock when their normal counterpart does.
+    - Drills of drills are made from an equivalent square area of their normal counterpart.
+    - Drills of drills can be upgraded into larger versions or disassembled into their normal counterparts with zero loss.
