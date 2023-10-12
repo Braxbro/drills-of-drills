@@ -183,7 +183,9 @@ local function startup(data)
             end
             for techName, _ in pairs(game.get_filtered_technology_prototypes(techFilter)) do
                 global.techSubgroupUnlocks[techName] = global.techSubgroupUnlocks[techName] or {}
-                table.insert(global.techSubgroupUnlocks[techName], subgroupName)
+                if game.item_subgroup_prototypes[subgroupName] then
+                    table.insert(global.techSubgroupUnlocks[techName], subgroupName)
+                end
             end
         end
     end
@@ -205,11 +207,9 @@ local function startup(data)
             minimumMiningTimeTarget[category] = name
         end
     end
-    
     for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
         minimumMiningTime[category] = minimumMiningTime[category] or 1
     end
-    
     restrictSpeed()
 end
 
