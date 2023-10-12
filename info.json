@@ -1,0 +1,9 @@
+{
+	"name": "drills-of-drills",
+	"version": "1.0.0",
+	"title": "Drills of Drills",
+	"author": "Braxbro",
+	"factorio_version": "1.1",
+	"description": "Adds new, larger variants of drills that are equivalent to multiple of their smaller counterparts.",
+	"dependencies": []
+}
