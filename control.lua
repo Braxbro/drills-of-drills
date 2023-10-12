@@ -4,9 +4,6 @@
 ---@diagnostic disable: missing-fields
 local hasStarted = false
 
-local minimumMiningTime = global.minimumMiningTime
-local minimumMiningTimeTarget = global.minimumMiningTimeTarget
-
 local function addDrillsOfDrills(data)
     local drill = data.created_entity
     if drill.prototype.group.name == "drills-of-drills" then
@@ -23,7 +20,7 @@ local function addDrillsOfDrills(data)
         global.destroyedDrills[script.register_on_entity_destroyed(drill)] = drill.unit_number
         for category, supported in pairs(drill.prototype.resource_categories) do
             if supported then
-                global.speedLimit[drill.unit_number] = math.min(global.speedLimit[drill.unit_number] or math.huge, 60 * minimumMiningTime[category] / math.max(1, drill.productivity_bonus))
+                global.speedLimit[drill.unit_number] = math.min(global.speedLimit[drill.unit_number] or math.huge, 60 * global.minimumMiningTime[category] / math.max(1, drill.productivity_bonus))
             end
         end
     end
@@ -33,7 +30,7 @@ local function refreshSpeedLimits()
     for unitNumber, drill in pairs(global.drills) do
         for category, supported in pairs(drill.prototype.resource_categories) do
             if supported then
-                global.speedLimit[unitNumber] = math.min(global.speedLimit[unitNumber], 60 * minimumMiningTime[category] / math.max(1, drill.productivity_bonus))
+                global.speedLimit[unitNumber] = math.min(global.speedLimit[unitNumber], 60 * global.minimumMiningTime[category] / math.max(1, drill.productivity_bonus))
             end
         end
     end
@@ -143,7 +140,7 @@ local function startup(data)
     global.drillNames = {}
     global.speedLimit = {}
     global.minimumMiningTime = {}
-    global.minimumMiningTime = {}
+    global.minimumMiningTimeTarget = {}
     global.destroyedDrills = {}
     global.overcapShapes = {}
     do -- Create a global lookup table for the drills of drills unlocked by a given technology.
@@ -204,13 +201,13 @@ local function startup(data)
     for name, prototype in pairs(resources) do
         local category = prototype.resource_category or "basic-solid"
         local miningTime = prototype.mineable_properties and prototype.mineable_properties.mining_time or 1
-        if (not minimumMiningTime[category]) or (minimumMiningTime[category] > miningTime) then -- store info about fastest ores of a type
-            minimumMiningTime[category] = miningTime
-            minimumMiningTimeTarget[category] = name
+        if (not global.minimumMiningTime[category]) or (global.minimumMiningTime[category] > miningTime) then -- store info about fastest ores of a type
+            global.minimumMiningTime[category] = miningTime
+            global.minimumMiningTimeTarget[category] = name
         end
     end
     for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
-        minimumMiningTime[category] = minimumMiningTime[category] or 1
+        global.minimumMiningTime[category] = global.minimumMiningTime[category] or 1
     end
     restrictSpeed()
 end
