@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.1
+Date: 2023-10-12
+  Bugfixes:
+    - Fixed a crash affecting 248k and other mods when drill items did not have the same names as their drill entities.
+    - Fixed a graphical issue when drills were connected to circuit networks.
+    - Fixed a graphical issue with some mining drill animations.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.0
 Date: 2023-10-12
   Info:

@@ -28,6 +28,7 @@ for category, _ in pairs(data.raw["resource-category"]) do -- make sure every ca
 end
 
 local drills = table.deepcopy(data.raw["mining-drill"]) -- don't create stuff based on DoD drills
+local items = table.deepcopy(data.raw.item)
 local function toEnergy(v, useJoules) -- undoes util.parse_energy()
     local energy_chars =
     {
@@ -107,7 +108,7 @@ for name, prototype in pairs(drills) do
                 (prototype.collision_box[2].y or prototype.collision_box[2][2]) -
                 (prototype.collision_box[1].y or prototype.collision_box[1][2])
             )
-    if not (prototype.resource_searching_radius + .1 < (math.min(width, height) / 2)) then -- if it doesn't require exact placement on top of an ore
+    if not (prototype.resource_searching_radius + .01 < (math.min(width, height) / 2)) then -- if it doesn't require exact placement on top of an ore
         log("Creating Drills of Drills for " .. name)
         data:extend{{
             group = "drills-of-drills",
@@ -383,6 +384,14 @@ for name, prototype in pairs(drills) do
                             end
                         end
                     end
+                    if mdgs.shift_animation_waypoints and (mdgs.shift_animation_waypoint_stop_duration or mdgs.shift_animation_transition_duration) then
+                        for _, direction in pairs(directions) do
+                            for _, vector in pairs(mdgs.shift_animation_waypoints[direction]) do
+                                vector[1] = vector[1] * tier
+                                vector[2] = vector[2] * tier
+                            end
+                        end
+                    end
                 end
                 if newPrototype.graphics_set then 
                     newPrototype.graphics_set = table.deepcopy(newPrototype.graphics_set)
@@ -460,23 +469,91 @@ for name, prototype in pairs(drills) do
                 newPrototype.base_picture = table.deepcopy(newPrototype.base_picture)
                 scaleSprite(newPrototype.base_picture)
             end
-            --new name
-            newPrototype.name = prefix .. "-" .. newPrototype.name .. "-" .. tier
-            newPrototype.minable.result = newPrototype.name
-            newPrototype.subgroup = "drill-of-" .. name .. "s"
-            newPrototype.order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
-            newPrototype.next_upgrade = newPrototype.next_upgrade and prefix .. "-" .. newPrototype.next_upgrade .. "-" .. tier
-            newPrototype.localised_name = {"item-name-placeholders.drill-of-drills", tier * tier,
-                prototype.localised_name or {"entity-name."..name}
-            }
+            if newPrototype.circuit_wire_connection_points then
+                for _, connectionPoint in pairs(newPrototype.circuit_wire_connection_points) do
+                    for _, wires in pairs(connectionPoint) do
+                        for _, vector in pairs(wires) do
+                            vector[1] = vector[1] * tier
+                            vector[2] = vector[2] * tier
+                        end
+                    end
+                end
+            end
+            if newPrototype.circuit_connector_sprites then
+                local function scaleCircuitConnectorSprites(CCSprites)
+                    scaleSprite(CCSprites.led_red)
+                    scaleSprite(CCSprites.led_green)
+                    scaleSprite(CCSprites.led_blue)
+                    if CCSprites.led_light[1] then -- it's an array of lights
+                        for _, light in pairs(CCSprites.led_light) do
+                            local vector = light.shift
+                            if vector then
+                                vector[1] = vector[1] * tier
+                                vector[2] = vector[2] * tier
+                            end
+                            light.size = light.size * tier
+                            if light.picture then scaleSprite(light.picture) end
+                        end
+                    else
+                        local light = CCSprites.led_light
+                        local vector = light.shift
+                        if vector then
+                            vector[1] = vector[1] * tier
+                            vector[2] = vector[2] * tier
+                        end
+                        light.size = light.size * tier
+                        if light.picture then scaleSprite(light.picture) end
+                    end
+                    if CCSprites.connector_main then 
+                        scaleSprite(CCSprites.connector_main)
+                    end
+                    if CCSprites.connector_shadow then 
+                        scaleSprite(CCSprites.connector_main)
+                    end
+                    if CCSprites.wire_pins then scaleSprite(CCSprites.wire_pins) end
+                    if CCSprites.wire_pins_shadow then scaleSprite(CCSprites.wire_pins_shadow) end
+                    if CCSprites.led_blue_off then scaleSprite(CCSprites.led_blue_off) end
+                    local vector = CCSprites.blue_led_light_offset
+                    if vector then
+                        vector[1] = vector[1] * tier
+                        vector[2] = vector[2] * tier
+                    end
+                    vector = CCSprites.red_green_led_light_offset
+                    if vector then
+                        vector[1] = vector[1] * tier
+                        vector[2] = vector[2] * tier
+                    end
+                end
+                newPrototype.circuit_connector_sprites = table.deepcopy(newPrototype.circuit_connector_sprites)
+                for _, ccSprite in pairs(newPrototype.circuit_connector_sprites) do
+                    scaleCircuitConnectorSprites(ccSprite)
+                end
+            end
             --new item
             local item = table.deepcopy(data.raw.item[name])
-            item.name = newPrototype.name
-            item.place_result = newPrototype.name
+            if not item then -- can't guarantee the item name matches the entity name
+                for _, foundItem in pairs(items) do
+                    if foundItem.place_result == name then
+                        item = table.deepcopy(foundItem)
+                    end
+                end
+            end
+            local baseItem = item.name
+            item.name = prefix .. "-" .. item.name .. "-" .. tier
+            item.place_result = prefix .. "-" .. newPrototype.name .. "-" .. tier
             item.stack_size = math.max(math.ceil(item.stack_size / (tier * tier)), 1)
             item.subgroup = "drill-of-" .. name .. "s"
             item.order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
             item.localised_name = {"item-name-placeholders.drill-of-drills", tier * tier,
+                prototype.localised_name or {"entity-name."..name}
+            }
+            --new name
+            newPrototype.name = item.place_result
+            newPrototype.minable.result = item.name
+            newPrototype.subgroup = "drill-of-" .. name .. "s"
+            newPrototype.order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
+            newPrototype.next_upgrade = newPrototype.next_upgrade and prefix .. "-" .. newPrototype.next_upgrade .. "-" .. tier
+            newPrototype.localised_name = {"item-name-placeholders.drill-of-drills", tier * tier,
                 prototype.localised_name or {"entity-name."..name}
             }
             --recipes
@@ -487,11 +564,11 @@ for name, prototype in pairs(drills) do
                 for i = (tier - 1), 1, -1 do
                     if drillTotal >= i * i then
                         if i == 1 then
-                            table.insert(ingredientsTable, {name, math.floor(drillTotal / (i * i))})
+                            table.insert(ingredientsTable, {baseItem, math.floor(drillTotal / (i * i))})
                             craftTime = math.floor(drillTotal / (i * i))
                         else
                             table.insert(ingredientsTable, {
-                                prefix .. "-" .. name .. "-" .. i, math.floor(drillTotal / (i * i))
+                                prefix .. "-" .. baseItem .. "-" .. i, math.floor(drillTotal / (i * i))
                             })
                         end
                         drillTotal = drillTotal % (i * i)
@@ -499,29 +576,29 @@ for name, prototype in pairs(drills) do
                 end
                 data:extend{{
                     type = "recipe",
-                    name = newPrototype.name .. "-upgrade",
+                    name = item.name .. "-upgrade",
                     subgroup = "drill-of-" .. name .. "s-upgrade",
                     ingredients = ingredientsTable,
-                    result = newPrototype.name,
+                    result = item.name,
                     energy_required = craftTime,
                     enabled = isStart[name]
                 }}
             end
             data:extend{{
                 type = "recipe",
-                name = newPrototype.name,
+                name = item.name,
                 subgroup = "drill-of-" .. name .. "s",
-                ingredients = {{name, tier * tier}},
-                result = newPrototype.name,
+                ingredients = {{baseItem, tier * tier}},
+                result = item.name,
                 energy_required = tier * tier,
                 enabled = isStart[name]
             }}
             data:extend{{
                 type = "recipe",
-                name = newPrototype.name .. "-disassembly",
+                name = item.name .. "-disassembly",
                 subgroup = "drill-of-" .. name .. "s-disassembly",
-                ingredients = {{newPrototype.name, 1}},
-                result = name,
+                ingredients = {{item.name, 1}},
+                result = baseItem,
                 result_count = tier * tier,
                 energy_required = 10 * tier * tier,
                 enabled = isStart[name],
