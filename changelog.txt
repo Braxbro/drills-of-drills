@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.6
+Date: 2023-10-13
+  Bugfixes:
+    - Fixed an issue where mod configuration changes would result in drills being improperly registered for destruction.
+    - Fixed an issue where destroyed drills were not properly unregistered.
+    - Fixed a few other issues caused by mod configuration changes.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.5
 Date: 2023-10-13
   Bugfixes:

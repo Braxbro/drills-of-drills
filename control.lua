@@ -16,7 +16,8 @@ local function addDrillsOfDrills(data)
             table.insert(global.drillNames, drill.name)
         end
         global.drills[drill.unit_number] = drill
-        global.destroyedDrills[script.register_on_entity_destroyed(drill)] = drill.unit_number
+        global.destroyedDrillsByUnitNumber[drill.unit_number] = script.register_on_entity_destroyed(drill)
+        global.destroyedDrills[global.destroyedDrillsByUnitNumber[drill.unit_number]] = drill.unit_number
         for category, supported in pairs(drill.prototype.resource_categories) do
             if supported then
                 global.speedLimit[drill.unit_number] = math.min(global.speedLimit[drill.unit_number] or math.huge, 60 * global.minimumMiningTime[category] / math.max(1, drill.productivity_bonus))
@@ -37,7 +38,9 @@ end
 
 local function removeDrillsOfDrills(data)
     if not global.destroyedDrills[data.registration_number] then return end -- it's not a drill of drills
+    global.destroyedDrillsByUnitNumber[global.destroyedDrills[data.registration_number]] = nil
     global.drills[global.destroyedDrills[data.registration_number]] = nil
+    global.destroyedDrills[data.registration_number] = nil
 end
 
 local function restrictSpeed(priorityOnly, specificPlayer)
@@ -136,14 +139,15 @@ end
 local hasStarted = false
 local function startup(data)
     if hasStarted then return end
-    global.techSubgroupUnlocks = {}
-    global.drills = {}
-    global.drillNames = {}
-    global.speedLimit = {}
-    global.minimumMiningTime = {}
-    global.minimumMiningTimeTarget = {}
-    global.destroyedDrills = {}
-    global.overcapShapes = {}
+    global.techSubgroupUnlocks = global.techSubgroupUnlocks or {}
+    global.drills = global.drills or {}
+    global.drillNames = global.drillNames or {}
+    global.speedLimit = global.speedLimit or {}
+    global.minimumMiningTime = global.minimumMiningTime or {}
+    global.minimumMiningTimeTarget = global.minimumMiningTimeTarget or {}
+    global.destroyedDrills = global.destroyedDrills or {}
+    global.destroyedDrillsByUnitNumber = global.destroyedDrillsByUnitNumber or {}
+    global.overcapShapes = global.overcapShapes or {}
     do -- Create a global lookup table for the drills of drills unlocked by a given technology.
         local subgroups = game.item_group_prototypes["drills-of-drills"].subgroups
         local itemFilter = {}
@@ -194,6 +198,10 @@ local function startup(data)
             for index, entity in pairs(surface.find_entities_filtered{type = "mining-drill"}) do
                 if entity.prototype.group.name == "drills-of-drills" then
                     global.drills[entity.unit_number] = entity
+                    if not global.destroyedDrillsByUnitNumber[entity.unit_number] then
+                        global.destroyedDrillsByUnitNumber[entity.unit_number] = script.register_on_entity_destroyed(entity)
+                        global.destroyedDrills[global.destroyedDrillsByUnitNumber[entity.unit_number]] = entity.unit_number
+                    end
                 end
             end
         end
