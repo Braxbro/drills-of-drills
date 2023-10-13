@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.5
+Date: 2023-10-13
+  Bugfixes:
+    - Fix issues with recipes being improperly enabled at the start of the game.
+    - Fix crash when adding mod to an existing save
+  Balancing:
+    - Drills of Drills recipes are now 4 times faster. 
+---------------------------------------------------------------------------------------------------
 Version: 1.0.4
 Date: 2023-10-12
   Bugfixes:

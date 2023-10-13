@@ -2,7 +2,6 @@
 ---@diagnostic disable: assign-type-mismatch
 ---@diagnostic disable: need-check-nil
 ---@diagnostic disable: missing-fields
-local hasStarted = false
 
 local function addDrillsOfDrills(data)
     local drill = data.created_entity
@@ -72,6 +71,7 @@ local function restrictSpeed(priorityOnly, specificPlayer)
     end
     for unitNumber, drill in pairs(drills) do
         local shapeId = global.overcapShapes[unitNumber]
+        if not global.speedLimit[unitNumber] then refreshSpeedLimits() end
         if drill.prototype.mining_speed * (1 + drill.speed_bonus) > global.speedLimit[unitNumber] then
             drill.active = false
             if shapeId and rendering.is_valid(shapeId) then rendering.destroy(shapeId) end
@@ -133,6 +133,7 @@ local function researched(data)
     restrictSpeed()
 end
 
+local hasStarted = false
 local function startup(data)
     if hasStarted then return end
     global.techSubgroupUnlocks = {}
@@ -209,6 +210,7 @@ local function startup(data)
     for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
         global.minimumMiningTime[category] = global.minimumMiningTime[category] or 1
     end
+    refreshSpeedLimits()
     restrictSpeed()
 end
 
@@ -272,6 +274,10 @@ script.on_event(defines.events.on_player_fast_transferred, function(data)
         end
     end
 end)
-script.on_nth_tick(750, function() restrictSpeed(false) end)
-script.on_nth_tick(150, function() restrictSpeed(true) end)
+script.on_nth_tick(750, function() 
+    restrictSpeed(false) 
+end)
+script.on_nth_tick(150, function() 
+    restrictSpeed(true) 
+end)
 script.on_nth_tick(15, blink)

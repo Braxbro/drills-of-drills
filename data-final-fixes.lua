@@ -61,10 +61,42 @@ local isStart = {}
 for name, _ in pairs(drills) do
     isStart[name] = false
 end
+local unlockableRecipes = {}
+for _, technology in pairs(data.raw["technology"]) do
+    if technology.effects then
+        for _, effect in pairs(technology.effects) do
+            if effect.type == "unlock-recipe" then
+                local possibleRecipe = data.raw.recipe[effect.recipe]
+                if possibleRecipe then
+                    unlockableRecipes[possibleRecipe.name] = possibleRecipe
+                end
+            end
+        end
+        if technology.normal then
+            for _, effect in pairs(technology.normal.effects) do
+                if effect.type == "unlock-recipe" then
+                    local possibleRecipe = data.raw.recipe[effect.recipe]
+                    if possibleRecipe then
+                        unlockableRecipes[possibleRecipe.name] = possibleRecipe
+                    end
+                end
+            end
+        end
+        if technology.expensive then
+            for _, effect in pairs(technology.expensive.effects) do
+                if effect.type == "unlock-recipe" then
+                    local possibleRecipe = data.raw.recipe[effect.recipe]
+                    if possibleRecipe then
+                        unlockableRecipes[possibleRecipe.name] = possibleRecipe
+                    end
+                end
+            end
+        end
+    end
+end
 
 for _, recipe in pairs(data.raw["recipe"]) do
-    recipe.enabled = recipe.enabled ~= false and true or false
-    if recipe.enabled then
+    if recipe.enabled ~= false and (not unlockableRecipes[recipe.name]) and (not recipe.hidden) then
         if recipe.normal or recipe.expensive then
             recipe.normal = recipe.normal or recipe.expensive
             recipe.expensive = recipe.expensive or recipe.normal -- this is default behavior, just made explicit
@@ -73,6 +105,7 @@ for _, recipe in pairs(data.raw["recipe"]) do
                     if product.type == "item" or type(product[1]) == "string" then
                         for drill, _ in pairs(isStart) do
                             if drill == (product.name or product[1]) then
+                                log("Found starting recipe " .. recipe.name .. " for " .. drill)
                                 isStart[drill] = true
                             end
                         end
@@ -81,6 +114,7 @@ for _, recipe in pairs(data.raw["recipe"]) do
             else
                 for drill, _ in pairs(isStart) do
                     if drill == recipe.normal.result then
+                        log("Found starting recipe " .. recipe.name .. " for " .. drill)
                         isStart[drill] = true
                     end
                 end
@@ -90,9 +124,17 @@ for _, recipe in pairs(data.raw["recipe"]) do
                 if product.type == "item" or type(product[1]) == "string" then
                     for drill, _ in pairs(isStart) do
                         if drill == (product.name or product[1]) then
+                            log("Found starting recipe " .. recipe.name .. " for " .. drill)
                             isStart[drill] = true
                         end
                     end
+                end
+            end
+        elseif recipe.result then
+            for drill, _ in pairs(isStart) do
+                if drill == recipe.result then
+                    log("Found starting recipe " .. recipe.name .. " for " .. drill)
+                    isStart[drill] = true
                 end
             end
         end
@@ -559,13 +601,13 @@ for name, prototype in pairs(drills) do
             --recipes
             if tier > 2 then
                 local ingredientsTable = {}
-                local craftTime = 1
+                local craftTime = .25
                 local drillTotal = tier * tier
                 for i = (tier - 1), 1, -1 do
                     if drillTotal >= i * i then
                         if i == 1 then
                             table.insert(ingredientsTable, {baseItem, math.floor(drillTotal / (i * i))})
-                            craftTime = math.floor(drillTotal / (i * i))
+                            craftTime = math.floor(drillTotal / (i * i)) / 4
                         else
                             table.insert(ingredientsTable, {
                                 prefix .. "-" .. baseItem .. "-" .. i, math.floor(drillTotal / (i * i))
@@ -581,7 +623,8 @@ for name, prototype in pairs(drills) do
                     ingredients = ingredientsTable,
                     result = item.name,
                     energy_required = craftTime,
-                    enabled = isStart[name]
+                    enabled = isStart[name],
+                    allow_as_intermediate = false
                 }}
             end
             data:extend{{
@@ -590,7 +633,7 @@ for name, prototype in pairs(drills) do
                 subgroup = "drill-of-" .. name .. "s",
                 ingredients = {{baseItem, tier * tier}},
                 result = item.name,
-                energy_required = tier * tier,
+                energy_required = tier * tier / 4,
                 enabled = isStart[name]
             }}
             data:extend{{
@@ -600,8 +643,10 @@ for name, prototype in pairs(drills) do
                 ingredients = {{item.name, 1}},
                 result = baseItem,
                 result_count = tier * tier,
-                energy_required = 10 * tier * tier,
+                energy_required = 2.5 * tier * tier,
                 enabled = isStart[name],
+                allow_as_intermediate = false,
+                allow_intermediates = false,
                 order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
             }}
             --create item and drill
