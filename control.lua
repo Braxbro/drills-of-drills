@@ -44,6 +44,7 @@ local function removeDrillsOfDrills(data)
 end
 
 local function restrictSpeed(priorityOnly, specificPlayer)
+    if not global.drillNames[1] then return end -- there have been no drills of drills placed!
     local drills = global.drills
     if priorityOnly then
         drills = {}
@@ -193,19 +194,6 @@ local function startup(data)
             end
         end
     end
-    do -- Re-create list of all drills of drills.
-        for _, surface in pairs(game.surfaces) do
-            for index, entity in pairs(surface.find_entities_filtered{type = "mining-drill"}) do
-                if entity.prototype.group.name == "drills-of-drills" then
-                    global.drills[entity.unit_number] = entity
-                    if not global.destroyedDrillsByUnitNumber[entity.unit_number] then
-                        global.destroyedDrillsByUnitNumber[entity.unit_number] = script.register_on_entity_destroyed(entity)
-                        global.destroyedDrills[global.destroyedDrillsByUnitNumber[entity.unit_number]] = entity.unit_number
-                    end
-                end
-            end
-        end
-    end
     local resources = game.get_filtered_entity_prototypes{{filter = "type", type = "resource"}}
     for name, prototype in pairs(resources) do
         local category = prototype.resource_category or "basic-solid"
@@ -217,6 +205,15 @@ local function startup(data)
     end
     for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
         global.minimumMiningTime[category] = global.minimumMiningTime[category] or 1
+    end
+    do -- Re-create list of all drills of drills.
+        for _, surface in pairs(game.surfaces) do
+            for index, entity in pairs(surface.find_entities_filtered{type = "mining-drill"}) do
+                if entity.prototype.group.name == "drills-of-drills" then
+                    addDrillsOfDrills({created_entity = entity}) -- if it's already there, it'll overwrite the entity's existing entries and do nothing. If it's not, it'll create one for it.
+                end
+            end
+        end
     end
     refreshSpeedLimits()
     restrictSpeed()

@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.7
+Date: 2023-10-14
+  Bugfixes:
+    - Fixed a crash when walking near non-Drills of Drills when no Drills of Drills have been placed on the save.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.6
 Date: 2023-10-13
   Bugfixes:
