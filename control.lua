@@ -74,26 +74,28 @@ local function restrictSpeed(priorityOnly, specificPlayer)
         end
     end
     for unitNumber, drill in pairs(drills) do
-        local shapeId = global.overcapShapes[unitNumber]
-        if not global.speedLimit[unitNumber] then refreshSpeedLimits() end
-        if drill.prototype.mining_speed * (1 + drill.speed_bonus) > global.speedLimit[unitNumber] then
-            drill.active = false
-            if shapeId and rendering.is_valid(shapeId) then rendering.destroy(shapeId) end
-            shapeId = rendering.draw_sprite{
-                sprite = "utility/danger_icon",
-                surface = drill.surface,
-                target = drill,
-                x_scale = 1,
-                y_scale = 1,
-                target_offset = drill.prototype.alert_icon_shift
-            }
-            local pos = drill.position
-            pos.x = pos.x + 1
-            drill.surface.create_entity{name = "flying-text", position = pos, text = {"alerts.drill-jammed"}}
-            global.overcapShapes[unitNumber] = shapeId
-        elseif drill.prototype.mining_speed * (1 + drill.speed_bonus) <= global.speedLimit[unitNumber] then
-            if shapeId and rendering.is_valid(shapeId) then rendering.destroy(shapeId) end
-            drill.active = true
+        if global.drills[unitNumber] then -- ensure the drill is a drill of drills
+            local shapeId = global.overcapShapes[unitNumber]
+            if not global.speedLimit[unitNumber] then refreshSpeedLimits() end
+            if drill.prototype.mining_speed * (1 + drill.speed_bonus) > global.speedLimit[unitNumber] then
+                drill.active = false
+                if shapeId and rendering.is_valid(shapeId) then rendering.destroy(shapeId) end
+                shapeId = rendering.draw_sprite{
+                    sprite = "utility/danger_icon",
+                    surface = drill.surface,
+                    target = drill,
+                    x_scale = 1,
+                    y_scale = 1,
+                    target_offset = drill.prototype.alert_icon_shift
+                }
+                local pos = drill.position
+                pos.x = pos.x + 1
+                drill.surface.create_entity{name = "flying-text", position = pos, text = {"alerts.drill-jammed"}}
+                global.overcapShapes[unitNumber] = shapeId
+            elseif drill.prototype.mining_speed * (1 + drill.speed_bonus) <= global.speedLimit[unitNumber] then
+                if shapeId and rendering.is_valid(shapeId) then rendering.destroy(shapeId) end
+                drill.active = true
+            end
         end
     end
 end
