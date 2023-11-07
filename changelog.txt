@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.9
+Date: 2023-11-7
+  Bugfixes:
+    - Fixed recipes being unlocked improperly by some technologies.
+    - Fixed recipes not being properly locked again after unresearching a technology through editor or script.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.8
 Date: 2023-10-15
   Bugfixes:

@@ -110,120 +110,6 @@ local function blink()
     end
 end
 
-local function researched(data)
-    local toUnlock = global.techSubgroupUnlocks[data.research.name] -- look up subgroups to unlock
-    if not toUnlock then return end
-    local recipeFilter = {}
-    for _, subgroup in pairs(toUnlock) do
-        table.insert(recipeFilter, {
-            filter = "has-ingredient-item",
-            elem_filters = {{
-                filter = "subgroup",
-                subgroup = subgroup
-            }},
-            mode = recipeFilter[1] and "or" or nil
-        })
-        table.insert(recipeFilter, {
-            filter = "has-product-item",
-            elem_filters = {{
-                filter = "subgroup",
-                subgroup = subgroup
-            }},
-            mode = "or"
-        })
-    end
-    for name, _ in pairs(game.get_filtered_recipe_prototypes(recipeFilter)) do
-        data.research.force.recipes[name].enabled = true
-    end
-    refreshSpeedLimits()
-    restrictSpeed()
-end
-
-local hasStarted = false
-local function startup(data)
-    if hasStarted then return end
-    global.techSubgroupUnlocks = global.techSubgroupUnlocks or {}
-    global.drills = global.drills or {}
-    global.drillNames = global.drillNames or {}
-    global.speedLimit = global.speedLimit or {}
-    global.minimumMiningTime = global.minimumMiningTime or {}
-    global.minimumMiningTimeTarget = global.minimumMiningTimeTarget or {}
-    global.destroyedDrills = global.destroyedDrills or {}
-    global.destroyedDrillsByUnitNumber = global.destroyedDrillsByUnitNumber or {}
-    global.overcapShapes = global.overcapShapes or {}
-    do -- Create a global lookup table for the drills of drills unlocked by a given technology.
-        local subgroups = game.item_group_prototypes["drills-of-drills"].subgroups
-        local itemFilter = {}
-        for _, subgroup in pairs(subgroups) do
-            local elem = {}
-            if itemFilter[1] then
-                elem.mode = "and"
-            end
-            elem.filter = "subgroup"
-            elem.subgroup = subgroup.name
-            elem.invert = true
-            table.insert(itemFilter, elem)
-        end
-        table.insert(itemFilter, {
-            filter = "place-result",
-            mode = "and",
-            elem_filters = {{
-                filter = "type",
-                type = "mining-drill"
-            }}
-        })
-        for name, _ in pairs(game.get_filtered_item_prototypes(itemFilter)) do
-            local subgroupName = "drill-of-" .. name .. "s"
-            local techFilter = {}
-            for recipeName, _ in pairs(game.get_filtered_recipe_prototypes({{
-                filter = "has-product-item",
-                elem_filters = {{
-                    filter = "name",
-                    name = name
-                }}
-            }})) do
-                table.insert(techFilter,{
-                    filter = "unlocks-recipe",
-                    recipe = recipeName,
-                    mode = (techFilter[1]) and "or" or nil
-                })
-            end
-            for techName, _ in pairs(game.get_filtered_technology_prototypes(techFilter)) do
-                global.techSubgroupUnlocks[techName] = global.techSubgroupUnlocks[techName] or {}
-                if game.item_subgroup_prototypes[subgroupName] then
-                    table.insert(global.techSubgroupUnlocks[techName], subgroupName)
-                end
-            end
-        end
-    end
-    local resources = game.get_filtered_entity_prototypes{{filter = "type", type = "resource"}}
-    for name, prototype in pairs(resources) do
-        local category = prototype.resource_category or "basic-solid"
-        local miningTime = prototype.mineable_properties and prototype.mineable_properties.mining_time or 1
-        if (not global.minimumMiningTime[category]) or (global.minimumMiningTime[category] > miningTime) then -- store info about fastest ores of a type
-            global.minimumMiningTime[category] = miningTime
-            global.minimumMiningTimeTarget[category] = name
-        end
-    end
-    for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
-        global.minimumMiningTime[category] = global.minimumMiningTime[category] or 1
-    end
-    do -- Re-create list of all drills of drills.
-        for _, surface in pairs(game.surfaces) do
-            for index, entity in pairs(surface.find_entities_filtered{type = "mining-drill"}) do
-                if entity.prototype.group.name == "drills-of-drills" then
-                    addDrillsOfDrills({created_entity = entity}) -- if it's already there, it'll overwrite the entity's existing entries and do nothing. If it's not, it'll create one for it.
-                end
-            end
-        end
-    end
-    refreshSpeedLimits()
-    restrictSpeed()
-end
-
-script.on_event(defines.events.on_research_finished, researched)
-script.on_init(startup)
-script.on_configuration_changed(startup)
 script.on_event(defines.events.on_built_entity, addDrillsOfDrills, {{filter = "type", type = "mining-drill"}})
 script.on_event(defines.events.on_entity_destroyed, removeDrillsOfDrills)
 script.on_event(defines.events.on_player_cursor_stack_changed, function(data)
@@ -288,3 +174,202 @@ script.on_nth_tick(150, function()
     restrictSpeed(true) 
 end)
 script.on_nth_tick(15, blink)
+
+local function researched(data, isStartup)
+    global.unlockedSubgroups[data.research.force.name] = global.unlockedSubgroups[data.research.force.name] or {} -- make sure the table has a value for the force
+    local effects = data.research.effects
+    for _, effect in pairs(effects) do
+        if effect.type == "unlock-recipe" then
+            local recipe = game.recipe_prototypes[effect.recipe]
+            for _, product in pairs(recipe.products) do
+                if product.type == "item" then
+                    local productItem = game.item_prototypes[product.name]
+                    if productItem.place_result and productItem.place_result.type == "mining-drill" then
+                        local groupName = "drill-of-" .. productItem.place_result.name .. "s"
+                        if game.item_subgroup_prototypes[groupName] then -- it has Drills of Drills!
+                            local recipes = game.get_filtered_recipe_prototypes{
+                                {
+                                    filter = "has-product-item",
+                                    elem_filters = {
+                                        {
+                                            filter = "subgroup",
+                                            subgroup = groupName
+                                        }
+                                    }
+                                },
+                                {
+                                    filter = "has-ingredient-item",
+                                    elem_filters = {
+                                        {
+                                            filter = "subgroup",
+                                            subgroup = groupName
+                                        }
+                                    },
+                                    mode = "or"
+                                }
+                            }
+                            for _, recipeToUnlock in pairs(recipes) do
+                                data.research.force.recipes[recipeToUnlock.name].enabled = true
+                            end
+                            global.unlockedSubgroups[data.research.force.name][groupName] = global.unlockedSubgroups[data.research.force.name][groupName] or {}
+                            for index, techName in pairs(global.unlockedSubgroups[data.research.force.name][groupName]) do -- prevent duplication
+                                if techName == data.research.name then
+                                    table.remove(global.unlockedSubgroups[data.research.force.name][groupName], index)
+                                end
+                            end
+                            table.insert(global.unlockedSubgroups[data.research.force.name][groupName], data.research.name)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    global.technologyMap[data.research.name].researched = true
+    if not isStartup then
+        for _, prerequisite in pairs(global.technologyMap[data.research.name].prerequisites) do
+            if not global.technologyMap[prerequisite].researched then -- Was a technology missed?
+                data.research = data.research.force.technologies[prerequisite]
+                researched(data)
+            end
+        end
+    end
+    refreshSpeedLimits()
+    restrictSpeed()
+end
+
+script.on_event(defines.events.on_research_finished, researched)
+
+local function unresearched(data)
+    global.unlockedSubgroups[data.research.force.name] = global.unlockedSubgroups[data.research.force.name] or {}
+    local effects = data.research.effects
+    for _, effect in pairs(effects) do
+        if effect.type == "unlock-recipe" then
+            local recipe = game.recipe_prototypes[effect.recipe]
+            for _, product in pairs(recipe.products) do
+                if product.type == "item" then
+                    local productItem = game.item_prototypes[product.name]
+                    if productItem.place_result and productItem.place_result.type == "mining-drill" then
+                        local groupName = "drill-of-" .. productItem.place_result.name .. "s"
+                        if global.unlockedSubgroups[data.research.force.name][groupName] then -- it has Drills of Drills!
+                            for index, name in pairs(global.unlockedSubgroups[data.research.force.name][groupName]) do
+                                if name == data.research.name then
+                                    table.remove(global.unlockedSubgroups[data.research.force.name][groupName], index)
+                                end
+                            end
+                            if not table.unpack(global.unlockedSubgroups[data.research.force.name][groupName]) then -- if there are no sources unlocked
+                                local recipes = game.get_filtered_recipe_prototypes{
+                                    {
+                                        filter = "has-product-item",
+                                        elem_filters = {
+                                            {
+                                                filter = "subgroup",
+                                                subgroup = groupName
+                                            }
+                                        }
+                                    },
+                                    {
+                                        filter = "has-ingredient-item",
+                                        elem_filters = {
+                                            {
+                                                filter = "subgroup",
+                                                subgroup = groupName
+                                            }
+                                        },
+                                        mode = "or"
+                                    }
+                                }
+                                for _, recipeToLock in pairs(recipes) do
+                                    data.research.force.recipes[recipeToLock.name].enabled = false
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    global.technologyMap[data.research.name].researched = false
+    for _, dependency in pairs(global.technologyMap[data.research.name].dependencies) do
+        if global.technologyMap[dependency].researched then -- a dependency was previously researched
+            data.research = data.research.force.technologies[dependency]
+            unresearched(data)
+        end
+    end
+    refreshSpeedLimits()
+    restrictSpeed()
+end
+
+script.on_event(defines.events.on_research_reversed, unresearched)
+
+local function techReset(data)
+    for _, technology in pairs(data.force.technologies) do
+        if technology.enabled then
+            local tbl = {
+                research = technology,
+                by_script = true,
+                name = defines.events.on_research_finished,
+                tick = game.tick
+            }
+            researched(tbl, true)
+        end
+    end
+end
+
+script.on_event(defines.events.on_technology_effects_reset, techReset)
+
+local hasStarted = false
+local function startup(data)
+    if hasStarted then return end
+    global.unlockedSubgroups = global.unlockedSubgroups or {}
+    global.technologyMap = {}
+    global.drills = global.drills or {}
+    global.drillNames = global.drillNames or {}
+    global.speedLimit = global.speedLimit or {}
+    global.minimumMiningTime = global.minimumMiningTime or {}
+    global.minimumMiningTimeTarget = global.minimumMiningTimeTarget or {}
+    global.destroyedDrills = global.destroyedDrills or {}
+    global.destroyedDrillsByUnitNumber = global.destroyedDrillsByUnitNumber or {}
+    global.overcapShapes = global.overcapShapes or {}
+    for name, technology in pairs(game.technology_prototypes) do -- rebuild tech map
+        global.technologyMap[name] = global.technologyMap[name] or {prerequisites = {}, dependencies = {}, researched = false}
+        for prereqName, _ in pairs(technology.prerequisites) do
+            global.technologyMap[prereqName] = global.technologyMap[prereqName] or {prerequisites = {}, dependencies = {}, researched = false}
+            table.insert(global.technologyMap[name].prerequisites, prereqName)
+            table.insert(global.technologyMap[prereqName].dependencies, name)
+        end
+    end
+    local resources = game.get_filtered_entity_prototypes{{filter = "type", type = "resource"}}
+    for name, prototype in pairs(resources) do
+        local category = prototype.resource_category or "basic-solid"
+        local miningTime = prototype.mineable_properties and prototype.mineable_properties.mining_time or 1
+        if (not global.minimumMiningTime[category]) or (global.minimumMiningTime[category] > miningTime) then -- store info about fastest ores of a type
+            global.minimumMiningTime[category] = miningTime
+            global.minimumMiningTimeTarget[category] = name
+        end
+    end
+    for category, _ in pairs(game.resource_category_prototypes) do -- make sure every category, even if empty, has a value
+        global.minimumMiningTime[category] = global.minimumMiningTime[category] or 1
+    end
+    do -- Re-create list of all drills of drills.
+        for _, surface in pairs(game.surfaces) do
+            for index, entity in pairs(surface.find_entities_filtered{type = "mining-drill"}) do
+                if entity.prototype.group.name == "drills-of-drills" then
+                    addDrillsOfDrills({created_entity = entity}) -- if it's already there, it'll overwrite the entity's existing entries and do nothing. If it's not, it'll create one for it.
+                end
+            end
+        end
+    end
+    for _, force in pairs(game.forces) do
+        local tbl = {
+            force = force,
+            name = defines.events.on_technology_effects_reset,
+            tick = game.tick
+        }
+        techReset(tbl)
+    end
+    refreshSpeedLimits()
+    restrictSpeed()
+end
+
+script.on_init(startup)
+script.on_configuration_changed(startup)
