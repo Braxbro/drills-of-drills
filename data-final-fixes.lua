@@ -599,6 +599,8 @@ for name, prototype in pairs(drills) do
                 prototype.localised_name or {"entity-name."..name}
             }
             --recipes
+            local nulliusPrefix = mods["nullius"] and "nullius-" or ""
+            local recipes = {}
             if tier > 2 then
                 local ingredientsTable = {}
                 local craftTime = .25
@@ -616,7 +618,7 @@ for name, prototype in pairs(drills) do
                         drillTotal = drillTotal % (i * i)
                     end
                 end
-                data:extend{{
+                table.insert(recipes, {
                     type = "recipe",
                     name = item.name .. "-upgrade",
                     subgroup = "drill-of-" .. name .. "s-upgrade",
@@ -624,19 +626,21 @@ for name, prototype in pairs(drills) do
                     result = item.name,
                     energy_required = craftTime,
                     enabled = isStart[name],
-                    allow_as_intermediate = false
-                }}
+                    allow_as_intermediate = false,
+                    order = nulliusPrefix .. string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
+                })
             end
-            data:extend{{
+            table.insert(recipes, {
                 type = "recipe",
                 name = item.name,
                 subgroup = "drill-of-" .. name .. "s",
                 ingredients = {{baseItem, tier * tier}},
                 result = item.name,
                 energy_required = tier * tier / 4,
-                enabled = isStart[name]
-            }}
-            data:extend{{
+                enabled = isStart[name],
+                order = nulliusPrefix .. string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
+            })
+            table.insert(recipes, {
                 type = "recipe",
                 name = item.name .. "-disassembly",
                 subgroup = "drill-of-" .. name .. "s-disassembly",
@@ -647,10 +651,22 @@ for name, prototype in pairs(drills) do
                 enabled = isStart[name],
                 allow_as_intermediate = false,
                 allow_intermediates = false,
-                order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
-            }}
+                order = nulliusPrefix .. string.format("%0" .. string.len(tostring(maxTier)) .. "d", tier)
+            })
+            if mods["nullius"] then -- explicit nullius compat, because nullius makes some extra assumptions
+                local category = "medium-crafting" -- default to all crafters
+                if string.find(item.name, "nullius%-medium%-miner") then
+                    category = "large-crafting"
+                elseif string.find(item.name, "nullius%-large%-miner") then
+                    category = "huge-crafting"
+                end
+                for _, recipe in pairs(recipes) do
+                    recipe.category = category
+                end
+            end
             --create item and drill
-            data:extend { newPrototype, item }
+            data:extend{ newPrototype, item }
+            data:extend(recipes)
             log("Created " .. newPrototype.name .. " and its recipes for drill" .. name .. "(" .. tier - 1 .. "/" .. maxTier - 1 .. ")")
         end
     end

@@ -303,7 +303,7 @@ script.on_event(defines.events.on_research_reversed, unresearched)
 
 local function techReset(data)
     for _, technology in pairs(data.force.technologies) do
-        if technology.enabled then
+        if technology.enabled and technology.researched then
             local tbl = {
                 research = technology,
                 by_script = true,
@@ -317,9 +317,7 @@ end
 
 script.on_event(defines.events.on_technology_effects_reset, techReset)
 
-local hasStarted = false
 local function startup(data)
-    if hasStarted then return end
     global.unlockedSubgroups = global.unlockedSubgroups or {}
     global.technologyMap = {}
     global.drills = global.drills or {}

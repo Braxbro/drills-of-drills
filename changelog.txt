@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.10
+Date: 2023-11-22
+  Bugfixes:
+    - Fixed an issue causing an incompatibility with Nullius in multiplayer.
+    - Fixed an issue causing Drills of Drills to only be hand-craftable with Nullius installed.
+    - Fixed an issue causing improper recipe unlocks when tech effects were reset.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.9
 Date: 2023-11-7
   Bugfixes:
