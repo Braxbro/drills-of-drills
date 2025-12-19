@@ -1,0 +1,74 @@
+---------------------------------------------------------------------------------------------------
+Version: 1.0.10
+Date: 2023-11-22
+  Bugfixes:
+    - Fixed an issue causing an incompatibility with Nullius in multiplayer.
+    - Fixed an issue causing Drills of Drills to only be hand-craftable with Nullius installed.
+    - Fixed an issue causing improper recipe unlocks when tech effects were reset.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.9
+Date: 2023-11-7
+  Bugfixes:
+    - Fixed recipes being unlocked improperly by some technologies.
+    - Fixed recipes not being properly locked again after unresearching a technology through editor or script.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.8
+Date: 2023-10-15
+  Bugfixes:
+    - Fixed a crash with unknown cause. 
+  Locale:
+    - Fixed missing locale key for the Drills of Drills item subgroup.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.7
+Date: 2023-10-14
+  Bugfixes:
+    - Fixed a crash when walking near non-Drills of Drills when no Drills of Drills have been placed on the save.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.6
+Date: 2023-10-13
+  Bugfixes:
+    - Fixed an issue where mod configuration changes would result in drills being improperly registered for destruction.
+    - Fixed an issue where destroyed drills were not properly unregistered.
+    - Fixed a few other issues caused by mod configuration changes.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.5
+Date: 2023-10-13
+  Bugfixes:
+    - Fix issues with recipes being improperly enabled at the start of the game.
+    - Fix crash when adding mod to an existing save
+  Balancing:
+    - Drills of Drills recipes are now 4 times faster. 
+---------------------------------------------------------------------------------------------------
+Version: 1.0.4
+Date: 2023-10-12
+  Bugfixes:
+    - Fix issues with recipes not being properly enabled at the start of the game.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.3
+Date: 2023-10-12
+  Bugfixes:
+    - Fix loading issue caused by desync fix.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.2
+Date: 2023-10-12
+  Bugfixes:
+    - Fix multiplayer desync when placing drills of drills. 
+---------------------------------------------------------------------------------------------------
+Version: 1.0.1
+Date: 2023-10-12
+  Bugfixes:
+    - Fixed a crash affecting 248k and other mods when drill items did not have the same names as their drill entities.
+    - Fixed a graphical issue when drills were connected to circuit networks.
+    - Fixed a graphical issue with some mining drill animations.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 2023-10-12
+  Info:
+    - First release of Drill of Drills.
+  Major Features:
+    - Drills of drills for each drill.
+      Drills with mining areas smaller than their footprint are excluded.
+      Drills that mine more than 60 outputs per second are excluded and will not be created.
+    - Drills of drills unlock when their normal counterpart does.
+    - Drills of drills are made from an equivalent square area of their normal counterpart.
+    - Drills of drills can be upgraded into larger versions or disassembled into their normal counterparts with zero loss.
