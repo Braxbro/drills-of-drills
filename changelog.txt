@@ -1,4 +1,22 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.0
+Date: 2025-12-20
+  Info:
+    - First 2.0 release of Drill of Drills.
+  Major Features:
+    - Drills of Drills now appear on the tech tree as their own separate techs.
+    - Drills of Drills now scale in odd increments, ensuring that pipe connections and outputs remain centered.
+  Locale:
+    - Fixed broken locale keys on recipes.
+  Balancing:
+    - Drills of Drills can now mine much faster. 
+    - By default, they are capped at half of the fastest belt's throughput.
+    - If the drill can output stacked items, the cap is adjusted for a fully stacked belt.
+    - Drills that output fluids are limited to maximum fluid throughput for 1 connection.
+    - Drills that snap to deposits exactly (like pumpjacks) are still excluded from Drills of Drills.
+    - Productivity is not factored into the speed cap.
+    - Drills of Drills now have a configurable max size. (default 32x32 tiles)
+---------------------------------------------------------------------------------------------------
 Version: 1.0.10
 Date: 2023-11-22
   Bugfixes:
