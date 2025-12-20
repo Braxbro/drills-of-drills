@@ -1,9 +1,10 @@
 -- bring forward a bunch of data from data stage so I don't have to fetch it again
-local drillRegistry = prototypes.mod_data["drills-of-drills-registry"]
+local drillRegistry = prototypes.mod_data["drills-of-drills-registry"].data
+local speedLimits = prototypes.mod_data["drills-of-drills-speed-limits"].data
 local meld = require("meld")
 
 local drillNames = {}
-for name, baseName in pairs(drillRegistry.data) do
+for name, baseName in pairs(drillRegistry) do
     table.insert(drillNames, name)
 end
 
@@ -53,7 +54,15 @@ script.on_event(defines.events.on_object_destroyed, removeDrillsOfDrills)
 local function getSpeedLimit(drill)
     -- non-Drills of Drills are not speed limited by Drills of Drills.
     if not drillRegistry[drill.name] then return nil end
-    return drillRegistry[drill.name][drill.mining_target.name]
+    local speedLimit = speedLimits[drill.mining_target.name]
+    local maxItemSpeed
+    local maxFluidSpeed = speedLimit.maxFluidSpeed
+    if drillRegistry[drill.name].stack then
+        maxItemSpeed = speedLimit.maxStackedSpeed
+    else
+        maxItemSpeed = speedLimit.maxUnstackedSpeed
+    end
+    return math.min(maxItemSpeed, maxFluidSpeed)
 end
 
 local function restrictSpeed(priorityOnly, specificPlayer)
@@ -62,6 +71,7 @@ local function restrictSpeed(priorityOnly, specificPlayer)
     if priorityOnly then
         toRestrict = {}
         local function getNearbyDrills(player)
+            if not player.character then return {} end
             local found = {}
             local pos = player.character.position
             local reachDistance = player.character.reach_distance * 2

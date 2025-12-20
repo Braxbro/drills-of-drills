@@ -1,6 +1,5 @@
 local prefix = "DoD"
 local drills = table.deepcopy(data.raw["mining-drill"]) -- don't create stuff based on DoD drills
-local items = data.raw["item"]
 
 data:extend { {
     type = "item-group",
@@ -17,10 +16,41 @@ data:extend{
         name = "drills-of-drills-registry",
         data_type = "drills-of-drills.drill-registry",
         data = {}
+    },
+    {
+        type = "mod-data",
+        name = "drills-of-drills-speed-limits",
+        data_type = "drills-of-drills.resource-speed-limit",
+        data = {}
     }
 }
 local drillRegistry = data.raw["mod-data"]["drills-of-drills-registry"]
+local speedLimits = data.raw["mod-data"]["drills-of-drills-speed-limits"]
 
+local possiblePrototypes = {
+        "item", "capsule", "gun", "item-with-entity-data", "item-with-label",
+        "module", "rail-planner", "space-platform-starter-pack", "tool",
+        "item-with-inventory", "item-with-tags", "selection-tool", "armor", "repair-tool",
+        "blueprint-book", "blueprint", "copy-paste-tool", "deconstruction-item",
+        "spidertron-remote", "upgrade-item"
+    }
+local function getItemByName(name)
+    for _, prototype in pairs(possiblePrototypes) do
+        local candidate = (data.raw[prototype] or {})[name]
+        if candidate then return candidate end
+    end
+end
+
+local function getItemByPlaceResult(placeResult)
+    for _, prototype in pairs(possiblePrototypes) do
+        local prototypes = (data.raw[prototype] or {})
+        for name, item in pairs(prototypes) do
+            if item.place_result == placeResult then
+                return item
+            end
+        end
+    end
+end
 
 local function toEnergy(v, useJoules) -- undoes util.parse_energy()
     local energy_chars =
@@ -59,36 +89,15 @@ for _, belt in pairs(data.raw["transport-belt"]) do
         maxBeltSpeed = beltSpeed
     end
 end
-if feature_flags["space-travel"] then
+if feature_flags["space_travel"] then
+    -- this just grabs whatever the first utility constants prototype is
     maxBeltStackSize = data.raw["utility-constants"]["default"].max_belt_stack_size
 end
+log("Maximum current belt stack size is: " .. maxBeltStackSize)
+
+local maxStackedBeltSpeed = maxBeltSpeed * maxBeltStackSize
 
 local resources = data.raw["resource"]
-local minimumAdjustedOutputRate = {}
-local minimumUnstackedOutputRate = {}
-local minimumFluidOutputRate = {}
-
--- initialize values at ridiculously high values
-for _, category in pairs(data.raw["resource-category"]) do
-    minimumAdjustedOutputRate[category.name] = {
-        outputAdjusted = math.huge,
-        outputUnstacked = math.huge,
-        outputFluid = math.huge,
-        outputSource = ""
-    }
-    minimumUnstackedOutputRate[category.name] = {
-        outputAdjusted = math.huge,
-        outputUnstacked = math.huge,
-        outputFluid = math.huge,
-        outputSource = ""
-    }
-    minimumFluidOutputRate[category.name] = {
-        outputAdjusted = math.huge,
-        outputUnstacked = math.huge,
-        outputFluid = math.huge,
-        outputSource = ""
-    }
-end
 
 local function getAdjustedStackRate(time, count, stack)
     return count / time * math.max(maxBeltStackSize / stack, 1)
@@ -99,13 +108,14 @@ end
 
 -- this table will help pass speed limit info forward later
 local outputRates = {}
+local resourcesByCategory = {}
 for _, resource in pairs(resources) do
     if resource.minable then
         local miningTime = resource.minable.mining_time
         local outputRate = {
-            outputAdjusted = math.huge, -- whatever doesn't get overridden will be ignored
-            outputUnstacked = math.huge,
-            outputFluid = math.huge,
+            outputAdjusted = 0, -- whatever doesn't get overridden will be ignored
+            outputUnstacked = 0,
+            outputFluid = 0,
             outputSource = resource.name
         }
         if resource.minable.results then
@@ -129,7 +139,7 @@ for _, resource in pairs(resources) do
                     outputRate.outputAdjusted = outputRate.outputAdjusted +
                         getAdjustedStackRate(
                             miningTime, amount,
-                            items[result.name].stack_size
+                            getItemByName(result.name).stack_size
                         )
                     outputRate.outputUnstacked = outputRate.outputUnstacked +
                         getUnstackedRate(miningTime, amount)
@@ -153,97 +163,113 @@ for _, resource in pairs(resources) do
         elseif resource.minable.result then
             outputRate.outputAdjusted =
                 getAdjustedStackRate(
-                    miningTime, resource.minable.count,
-                    items[resource.minable.result].stack_size
+                    miningTime, resource.minable.count or 1,
+                    getItemByName(resource.minable.result).stack_size
                 )
-            outputRate.outputUnstacked = getUnstackedRate(miningTime, resource.minable.count)
+            outputRate.outputUnstacked = getUnstackedRate(miningTime, resource.minable.count or 1)
         end
         -- resources have to have a category
+        resource.category = resource.category or "basic-solid"
+        resourcesByCategory[resource.category] = resourcesByCategory[resource.category] or {}
+        table.insert(resourcesByCategory[resource.category], resource.name)
         outputRates[resource.name] = outputRate
-        if outputRate.outputAdjusted < minimumAdjustedOutputRate[resource.category].outputAdjusted then
-            minimumAdjustedOutputRate[resource.category] = outputRate
-        end
-        if outputRate.outputUnstacked < minimumUnstackedOutputRate[resource.category].outputUnstacked then
-            minimumUnstackedOutputRate[resource.category] = outputRate
-        end
-        if outputRate.outputFluid < minimumFluidOutputRate[resource.category].outputFluid then
-            minimumFluidOutputRate[resource.category] = outputRate
-        end
     end
+end
+
+-- register speed limit info in mod_data object
+for resource, outputRate in pairs(outputRates) do
+    local maxSpeeds = {
+        maxFluidSpeed = math.huge,
+        maxUnstackedSpeed = math.huge,
+        maxStackedSpeed = math.huge
+    }
+    if outputRate.outputFluid > 0 then
+        maxSpeeds.maxFluidSpeed = maxFluidThroughput / outputRate.outputFluid
+    end
+    if outputRate.outputUnstacked > 0 then
+        -- halved due to the fact that drills can only output to one lane
+        maxSpeeds.maxUnstackedSpeed = (maxBeltSpeed / outputRate.outputUnstacked) / 2
+    end
+    -- items with stack size lower than max belt stack size will have lower throughput
+    -- so their speed is adjusted first
+    if outputRate.outputAdjusted > 0 then
+        -- halved due to the fact that drills can only output to one lane
+        maxSpeeds.maxStackedSpeed = (maxStackedBeltSpeed / outputRate.outputAdjusted) / 2
+    end
+    speedLimits.data[resource] = maxSpeeds
 end
 
 -- Don't need to check if drills are starter recipes,
 -- because I can make them unlock based on crafting their non-Drills of Drills counterparts.
 for name, prototype in pairs(drills) do
+    -- skip drills that can't be placed normally
+    if not getItemByPlaceResult(name) then goto skip_drill end
     local width = math.ceil( -- length of the entity on the x-axis
-        (prototype.collision_box[2].x or prototype.collision_box[2][1]) -
-        (prototype.collision_box[1].x or prototype.collision_box[1][1])
+        (prototype.selection_box[2].x or prototype.selection_box[2][1]) -
+        (prototype.selection_box[1].x or prototype.selection_box[1][1])
     )
     local height = math.ceil( -- length of the entity on the y-axis
-        (prototype.collision_box[2].y or prototype.collision_box[2][2]) -
-        (prototype.collision_box[1].y or prototype.collision_box[1][2])
+        (prototype.selection_box[2].y or prototype.selection_box[2][2]) -
+        (prototype.selection_box[1].y or prototype.selection_box[1][2])
     )
     -- if the drill doesn't require exact placement on a resource patch
-    if not (prototype.resource_searching_radius + .01 < (math.min(width, height) / 2)) then
+    if not ((prototype.resource_searching_radius + .01) < (math.min(width, height) / 2)) then
         log("Creating Drills of Drills for " .. name)
-        data:extend { {
-            group = "drills-of-drills",
-            type = "item-subgroup",
-            name = "drill-of-" .. name .. "s"
-        } }
-        data:extend { {
-            group = "drills-of-drills",
-            type = "item-subgroup",
-            name = "drill-of-" .. name .. "s-upgrade"
-        } }
-        data:extend { {
-            group = "drills-of-drills",
-            type = "item-subgroup",
-            name = "drill-of-" .. name .. "s-disassembly"
-        } }
+        local subgroups = {
+            {
+                group = "drills-of-drills",
+                type = "item-subgroup",
+                name = "drill-of-" .. name .. "s"
+            },
+            {
+                group = "drills-of-drills",
+                type = "item-subgroup",
+                name = "drill-of-" .. name .. "s-upgrade"
+            },
+            {
+                group = "drills-of-drills",
+                type = "item-subgroup",
+                name = "drill-of-" .. name .. "s-disassembly"
+            }
+        }
         local speed = prototype.mining_speed
         local stack = prototype.drops_full_belt_stacks
 
         -- math.huge is treated as unset
-        local minItemOutput = (prototype.vector_to_place_result and math.huge) or nil
-        local minFluidOutput = (prototype.output_fluid_box and math.huge) or nil
+        local maxItemSpeed = (prototype.vector_to_place_result and 0) or nil
+        local maxFluidSpeed = (prototype.output_fluid_box and 0) or nil
 
         -- support cursed drills that mine both fluids and items, regardless of if it works
-        local slowestItemMine
-        local slowestFluidMine
         for _, category in pairs(prototype.resource_categories) do
-            if minItemOutput then
-                -- watch this cursed table access trick :P
-                local compareTo = (stack and minimumAdjustedOutputRate or
-                    minimumUnstackedOutputRate)[category]
-                -- wanna see me do it again
-                local outputValue = (stack and compareTo.outputAdjusted or compareTo.outputUnstacked)
-                if minItemOutput > outputValue then
-                    minItemOutput = outputValue
-                    slowestItemMine = compareTo.outputSource
+            for _, resource in pairs(resourcesByCategory[category]) do
+                local itemSpeedToCompare = stack and
+                    speedLimits.data[resource].maxStackedSpeed or
+                    speedLimits.data[resource].maxUnstackedSpeed
+                if maxItemSpeed and maxItemSpeed < itemSpeedToCompare then
+                    maxItemSpeed = itemSpeedToCompare
                 end
-            end
-            if minFluidOutput then
-                local compareTo = minimumFluidOutputRate[category]
-                if minFluidOutput > compareTo.outputFluid then
-                    minFluidOutput = compareTo.outputFluid
-                    slowestFluidMine = compareTo.outputSource
+                local fluidSpeedToCompare = speedLimits.data[resource].maxFluidSpeed
+                if maxFluidSpeed and maxFluidSpeed < fluidSpeedToCompare then
+                    maxFluidSpeed = fluidSpeedToCompare
                 end
             end
         end
+
         -- In 1.1, Drills of Drills used (1+t)^2 for drill scaling
         -- In 2.0, it will use (1+2t)^2 for drill scaling.
         -- This keeps centered aspects such as fluid connections and item outputs centered on tiles.
-        local maxItemThroughput = maxBeltSpeed * (stack and maxBeltStackSize or 1)
-        local maxItemTier = minItemOutput and
-            math.floor(((math.sqrt(maxItemThroughput / (minItemOutput * speed)) - 1) / 2) + 1)
+        local maxItemTier = maxItemSpeed and
+            math.floor(((math.sqrt(maxItemSpeed / speed) - 1) / 2) + 1)
             or math.huge
-        local maxFluidTier = minFluidOutput and
-            math.floor(((math.sqrt(maxFluidThroughput / (minFluidOutput * speed)) - 1) / 2) + 1)
+        local maxFluidTier = maxFluidSpeed and
+            math.floor(((math.sqrt(maxFluidSpeed / speed) - 1) / 2) + 1)
             or math.huge
-        local maxTier = math.min(maxItemTier, maxFluidTier)
+        -- cap drill sizes to ensure they fit in a single chunk (and limit ridiculousness for slow drills)
+        local maxSizeTier = (((math.floor(32 / math.max(width, height)) - 1) / 2) + 1)
+        local maxTier = math.min(maxItemTier, maxFluidTier, maxSizeTier)
         if maxTier == math.huge then
             log("Drill " .. name .. " produces no output?")
+            goto skip_drill
         elseif maxTier < 2 then
             log(
                 "Cannot create Drills of Drills for " .. name ..
@@ -263,9 +289,14 @@ for name, prototype in pairs(drills) do
                 newPrototype.resource_searching_radius =
                     ((newPrototype.resource_searching_radius + .01) * tierScale) - .01
                 newPrototype.energy_usage = toEnergy(util.parse_energy(newPrototype.energy_usage) * tierSquared)
-                if newPrototype.energy_source.emissions_per_minute then
-                    newPrototype.energy_source.emissions_per_minute =
-                        newPrototype.energy_source.emissions_per_minute * tierSquared
+                local energySource = newPrototype.energy_source
+                if energySource.emissions_per_minute then
+                    for pollutionType, value in pairs(
+                        energySource.emissions_per_minute
+                    ) do
+                        energySource.emissions_per_minute[pollutionType] =
+                            energySource.emissions_per_minute[pollutionType] * tierSquared
+                    end
                 end
 
                 -- reference values for entity size
@@ -289,184 +320,9 @@ for name, prototype in pairs(drills) do
                     {
                         widthOffset, heightOffset
                     }, {
-                    width + widthOffset, height + heightOffset
+                        width + widthOffset, height + heightOffset
+                    }
                 }
-                }
-
-                -- fix fluidboxes
-                local fluidIn = newPrototype.input_fluid_box
-                local fluidOut = newPrototype.output_fluid_box
-                local offset, internalOffset, externalOffset
-
-                if fluidIn then
-                    for _, connection in pairs(fluidIn.pipe_connections) do
-                        if connection.connection_type ~= "linked" then
-                            -- ordering this way prevents a need check nil warning
-                            -- but I would personally have put offset declaration inside the if statement...
-                            -- I don't want to suppress warnings unnecessarily, though, so. Ugly it is.
-                            offset = connection.position
-                            if offset then
-                                internalOffset = {
-                                    math.min(
-                                        math.max(
-                                            offset[1],
-                                            size[1].x or size[1][1]
-                                        ),
-                                        size[2].x or size[2][1]
-                                    ),
-                                    math.min(
-                                        math.max(
-                                            offset[2],
-                                            size[1].y or size[1][2]
-                                        ),
-                                        size[2].y or size[2][2]
-                                    )
-                                }
-                                externalOffset = {
-                                    offset[1] - internalOffset[1], offset[2] - internalOffset[2]
-                                }
-                                connection.position = { internalOffset[1] * tierScale + externalOffset[1],
-                                    internalOffset[2] * tierScale + externalOffset[2] }
-                            else
-                                for index, vector in pairs(connection.positions) do
-                                    offset = vector
-                                    internalOffset = {
-                                        math.min(
-                                            math.max(
-                                                offset[1],
-                                                size[1].x or size[1][1]
-                                            ),
-                                            size[2].x or size[2][1]
-                                        ),
-                                        math.min(
-                                            math.max(
-                                                offset[2],
-                                                size[1].y or size[1][2]
-                                            ),
-                                            size[2].y or size[2][2]
-                                        )
-                                    }
-                                    externalOffset = {
-                                        offset[1] - internalOffset[1], offset[2] - internalOffset[2]
-                                    }
-                                    connection.positions[index] = { internalOffset[1] * tierScale + externalOffset[1],
-                                        internalOffset[2] * tierScale + externalOffset[2] }
-                                end
-                            end
-                        end
-                    end
-                end
-
-                if fluidOut then
-                    for _, connection in pairs(fluidOut.pipe_connections) do
-                        if connection.connection_type ~= "linked" then
-                            offset = connection.position
-                            if offset then
-                                internalOffset = {
-                                    math.min(
-                                        math.max(
-                                            offset[1],
-                                            size[1].x or size[1][1]
-                                        ),
-                                        size[2].x or size[2][1]
-                                    ),
-                                    math.min(
-                                        math.max(
-                                            offset[2],
-                                            size[1].y or size[1][2]
-                                        ),
-                                        size[2].y or size[2][2]
-                                    )
-                                }
-                                externalOffset = {
-                                    offset[1] - internalOffset[1], offset[2] - internalOffset[2]
-                                }
-                                connection.position = { internalOffset[1] * tierScale + externalOffset[1],
-                                    internalOffset[2] * tierScale + externalOffset[2] }
-                            else
-                                for index, vector in pairs(connection.positions) do
-                                    offset = vector
-                                    internalOffset = {
-                                        math.min(
-                                            math.max(
-                                                offset[1],
-                                                size[1].x or size[1][1]
-                                            ),
-                                            size[2].x or size[2][1]
-                                        ),
-                                        math.min(
-                                            math.max(
-                                                offset[2],
-                                                size[1].y or size[1][2]
-                                            ),
-                                            size[2].y or size[2][2]
-                                        )
-                                    }
-                                    externalOffset = {
-                                        offset[1] - internalOffset[1], offset[2] - internalOffset[2]
-                                    }
-                                    connection.positions[index] = { internalOffset[1] * tierScale + externalOffset[1],
-                                        internalOffset[2] * tierScale + externalOffset[2] }
-                                end
-                            end
-                        end
-                    end
-                end
-
-                -- bounding boxes and related values
-                offset = newPrototype.vector_to_place_result
-                internalOffset = {
-                    math.min(
-                        math.max(
-                            offset[1],
-                            size[1].x or size[1][1]
-                        ),
-                        size[2].x or size[2][1]
-                    ),
-                    math.min(
-                        math.max(
-                            offset[2],
-                            size[1].y or size[1][2]
-                        ),
-                        size[2].y or size[2][2]
-                    )
-                }
-                externalOffset = {
-                    offset[1] - internalOffset[1], offset[2] - internalOffset[2]
-                }
-                newPrototype.vector_to_place_result = { internalOffset[1] * tierScale + externalOffset[1],
-                    internalOffset[2] * tierScale + externalOffset[2] }
-                local bBoxes = {
-                    "collision_box", "map_generator_bounding_box", "selection_box", "sticker_box",
-                    "hit_visualization_box"
-                }
-                for _, property in pairs(bBoxes) do
-                    if newPrototype[property] then
-                        local bBox = newPrototype[property]
-                        local buffer = {
-                            {
-                                (size[1].x or size[1][1]) - (bBox[1].x or bBox[1][1]),
-                                (size[1].y or size[1][2]) - (bBox[1].y or bBox[1][2])
-                            },
-                            {
-                                (size[2].x or size[2][1]) - (bBox[2].x or bBox[2][1]),
-                                (size[2].y or size[2][2]) - (bBox[2].y or bBox[2][2])
-                            }
-                        }
-                        newPrototype[property] = {
-                            {
-                                (size[1].x or size[1][1]) * tierScale - (buffer[1].x or buffer[1][1]),
-                                (size[1].y or size[1][2]) * tierScale - (buffer[1].y or buffer[1][2])
-                            },
-                            {
-                                (size[2].x or size[2][1]) * tierScale - (buffer[2].x or buffer[2][1]),
-                                (size[2].y or size[2][2]) * tierScale - (buffer[2].y or buffer[2][2])
-                            }
-                        }
-                    end
-                end
-                newPrototype.drawing_box_vertical_extension =
-                    newPrototype.drawing_box_vertical_extension * tierScale
 
                 -- graphics helper functions
                 local directions = { "north", "south", "east", "west" }
@@ -543,6 +399,9 @@ for name, prototype in pairs(drills) do
                     if mdgs.idle_animation then
                         scaleAnimation(mdgs.idle_animation)
                     end
+                    if mdgs.integration_patch then
+                        scaleSprite(mdgs.integration_patch)
+                    end
                     if mdgs.working_visualisations then
                         for _, working_visualisation in pairs(mdgs.working_visualisations) do
                             if working_visualisation.animation then
@@ -617,6 +476,144 @@ for name, prototype in pairs(drills) do
                     end
                 end
 
+                -- fix fluidboxes
+                local fluidIn = newPrototype.input_fluid_box
+                local fluidOut = newPrototype.output_fluid_box
+                local fluidEnergy = energySource.fluid_box
+                local bounds = {
+                    [defines.direction.north] = 
+                        {0, newPrototype.selection_box[1].y or 
+                        newPrototype.selection_box[1][2]},
+                    [defines.direction.east] =
+                        {newPrototype.selection_box[2].x or 
+                        newPrototype.selection_box[2][1], 0},
+                    [defines.direction.south] = 
+                        {0, newPrototype.selection_box[2].y or 
+                        newPrototype.selection_box[2][2]},
+                    [defines.direction.west] =
+                        {newPrototype.selection_box[1].x or 
+                        newPrototype.selection_box[1][1], 0}
+                }
+
+                local function fixFluidBoxConnections(pipeConnections)
+                    for _, connection in pairs(pipeConnections) do
+                        if connection.connection_type ~= "linked" then
+                            -- determines the direction the connection points
+                            local direction = connection.direction
+                            -- if position exists, ignore positions
+                            local position = connection.position
+                            if position then
+                                local bound = bounds[direction]
+                                -- standardize format
+                                position = {
+                                    position.x or position[1], position.y or position[2]
+                                }
+                                for coordinate, value in pairs(bound) do
+                                    if value ~= 0 then
+                                        position[coordinate] = value * tierScale -
+                                            (value - position[coordinate])
+                                    else
+                                        position[coordinate] = position[coordinate] * tierScale
+                                    end
+                                end
+                                connection.position = position
+                            else
+                                for index, position in pairs(connection.positions) do
+                                    direction = (connection.direction + (index - 1) * 4) % 16
+                                    local bound = bounds[direction]
+                                    position = {
+                                        position.x or position[1], position.y or position[2]
+                                    }
+                                    for coordinate, value in pairs(bound) do
+                                        if value ~= 0 then
+                                            position[coordinate] = value * tierScale -
+                                                (value - position[coordinate])
+                                        else
+                                            position[coordinate] = position[coordinate] * tierScale
+                                        end
+                                    end
+                                    connection.positions[index] = position
+                                end
+                            end
+                            
+                        end
+                    end
+                end
+
+                if fluidIn then
+                    fixFluidBoxConnections(fluidIn.pipe_connections)
+                end
+
+                if fluidOut then
+                    fixFluidBoxConnections(fluidOut.pipe_connections)
+                end
+
+                if fluidEnergy then
+                    fixFluidBoxConnections(fluidEnergy.pipe_connections)
+                end
+
+                -- bounding boxes and related values
+                local vtpr = newPrototype.vector_to_place_result
+                vtpr = {
+                    vtpr.x or vtpr[1], vtpr.y or vtpr[2]
+                }
+                local closestBound
+                local dtpr
+                for direction, bound in pairs(bounds) do
+                    for coordinate, value in pairs(bound) do
+                        if value ~= 0 then
+                            local margin = math.abs(value - vtpr[coordinate])
+                            if (not closestBound) or (margin < closestBound) then
+                                closestBound = margin
+                                dtpr = direction
+                            end
+                        end
+                    end
+                end
+                for coordinate, value in pairs(bounds[dtpr]) do
+                    if value ~= 0 then
+                        newPrototype.vector_to_place_result[coordinate] =
+                            value * tierScale -
+                            (value - newPrototype.vector_to_place_result[coordinate])
+                    else
+                        newPrototype.vector_to_place_result[coordinate] =
+                            newPrototype.vector_to_place_result[coordinate] * tierScale
+                    end
+                end
+                local bBoxes = {
+                    "collision_box", "map_generator_bounding_box", "selection_box", "sticker_box",
+                    "hit_visualization_box"
+                }
+                for _, property in pairs(bBoxes) do
+                    if newPrototype[property] then
+                        local bBox = newPrototype[property]
+                        local buffer = {
+                            {
+                                (size[1].x or size[1][1]) - (bBox[1].x or bBox[1][1]),
+                                (size[1].y or size[1][2]) - (bBox[1].y or bBox[1][2])
+                            },
+                            {
+                                (size[2].x or size[2][1]) - (bBox[2].x or bBox[2][1]),
+                                (size[2].y or size[2][2]) - (bBox[2].y or bBox[2][2])
+                            }
+                        }
+                        newPrototype[property] = {
+                            {
+                                (size[1].x or size[1][1]) * tierScale - (buffer[1].x or buffer[1][1]),
+                                (size[1].y or size[1][2]) * tierScale - (buffer[1].y or buffer[1][2])
+                            },
+                            {
+                                (size[2].x or size[2][1]) * tierScale - (buffer[2].x or buffer[2][1]),
+                                (size[2].y or size[2][2]) * tierScale - (buffer[2].y or buffer[2][2])
+                            }
+                        }
+                    end
+                end
+                if newPrototype.drawing_box_vertical_extension then
+                    newPrototype.drawing_box_vertical_extension =
+                        newPrototype.drawing_box_vertical_extension * tierScale
+                end
+
                 -- rescale graphics
                 if newPrototype.graphics_set then
                     if newPrototype.graphics_set then
@@ -633,6 +630,11 @@ for name, prototype in pairs(drills) do
                 if newPrototype.base_picture then
                     newPrototype.base_picture = table.deepcopy(newPrototype.base_picture)
                     scaleSprite(newPrototype.base_picture)
+                end
+
+                if newPrototype.integration_patch then
+                    newPrototype.integration_patch = table.deepcopy(newPrototype.integration_patch)
+                    scaleSprite(newPrototype.integration_patch)
                 end
 
                 if newPrototype.circuit_connector then
@@ -653,14 +655,10 @@ for name, prototype in pairs(drills) do
                 end
 
                 -- new item
-                local item = items[name]
+                local item = getItemByName(name)
                 -- can't guarantee the item name matches the entity name, but it's a good enough guess sometimes
                 if (not item) or item.place_result ~= name then
-                    for _, foundItem in pairs(items) do
-                        if foundItem.place_result == name then
-                            item = foundItem
-                        end
-                    end
+                    item = getItemByPlaceResult(name)
                 end
                 item = table.deepcopy(item)
 
@@ -679,12 +677,10 @@ for name, prototype in pairs(drills) do
                 newPrototype.subgroup = "drill-of-" .. name .. "s"
                 newPrototype.order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tierScale)
                 newPrototype.next_upgrade = newPrototype.next_upgrade
-                    and prefix .. "-" .. newPrototype.next_upgrade .. "-" .. tierScale
+                    and prefix .. "-" .. newPrototype.next_upgrade .. "-" .. tier - 1
                 newPrototype.localised_name = { "item-name-placeholders.drill-of-drills", tostring(tierSquared),
                     prototype.localised_name or { "entity-name." .. name }
                 }
-
-                drillRegistry.data[newPrototype.name] = name
 
                 -- recipes
                 local nulliusPrefix = mods["nullius"] and "nullius-" or ""
@@ -693,22 +689,35 @@ for name, prototype in pairs(drills) do
                     local ingredientsTable = {}
                     local craftTime = .25
                     local drillTotal = tierSquared
-                    for i = (tierScale - 1), 1, -1 do
-                        if drillTotal >= i * i then
+                    for i = (tier - 1), 1, -1 do
+                        local iScale = (2 * (i - 1)) + 1
+                        local iSquared = iScale * iScale
+                        if drillTotal >= iSquared then
                             if i == 1 then
-                                table.insert(ingredientsTable, { baseItem, math.floor(drillTotal / (i * i)) })
-                                craftTime = math.floor(drillTotal / (i * i)) / 4
+                                table.insert(ingredientsTable, { 
+                                    type = "item",
+                                    name = baseItem, 
+                                    amount = math.floor(drillTotal / (iSquared))
+                                })
+                                craftTime = math.floor(drillTotal / (iSquared)) / 4
                             else
                                 table.insert(ingredientsTable, {
-                                    prefix .. "-" .. baseItem .. "-" .. i, math.floor(drillTotal / (i * i))
+                                    type = "item",
+                                    name = prefix .. "-" .. baseItem .. "-" .. i - 1, 
+                                    amount = math.floor(drillTotal / (iSquared))
                                 })
                             end
-                            drillTotal = drillTotal % (i * i)
+                            drillTotal = drillTotal % (iSquared)
                         end
                     end
                     table.insert(recipes, {
                         type = "recipe",
                         name = item.name .. "-upgrade",
+                        localised_name = {"", {"recipe-name-placeholders.upgrade"},
+                            { "item-name-placeholders.drill-of-drills", tostring(tierSquared),
+                                prototype.localised_name or { "entity-name." .. name }
+                            }
+                        },
                         subgroup = "drill-of-" .. name .. "s-upgrade",
                         ingredients = ingredientsTable,
                         results = {
@@ -725,10 +734,16 @@ for name, prototype in pairs(drills) do
                     type = "recipe",
                     name = item.name,
                     subgroup = "drill-of-" .. name .. "s",
-                    ingredients = { { baseItem, tierSquared } },
+                    ingredients = { 
+                        {
+                            type = "item",
+                            name = baseItem,
+                            amount = tierSquared
+                        }
+                    },
                     results = {
-                            {type = "item", name = item.name, amount = 1}
-                        },
+                        {type = "item", name = item.name, amount = 1}
+                    },
                     energy_required = tierSquared / 4,
                     enabled = false,
                     order = nulliusPrefix ..
@@ -737,11 +752,22 @@ for name, prototype in pairs(drills) do
                 table.insert(recipes, {
                     type = "recipe",
                     name = item.name .. "-disassembly",
+                    localised_name = {"", {"recipe-name-placeholders.disassembly"},
+                        { "item-name-placeholders.drill-of-drills", tostring(tierSquared),
+                            prototype.localised_name or { "entity-name." .. name }
+                        }
+                    },
                     subgroup = "drill-of-" .. name .. "s-disassembly",
-                    ingredients = { { item.name, 1 } },
+                    ingredients = { 
+                        {
+                            type = "item",
+                            name = item.name,
+                            amount = 1
+                        } 
+                    },
                     results = {
-                            {type = "item", name = baseItem, amount = tierSquared}
-                        },
+                        {type = "item", name = baseItem, amount = tierSquared}
+                    },
                     energy_required = 2.5 * tierSquared,
                     enabled = false,
                     allow_as_intermediate = false,
@@ -765,7 +791,7 @@ for name, prototype in pairs(drills) do
                 local tech = {
                     type = "technology",
                     name = item.name,
-                    localised_name = {"entity-name." .. newPrototype.name},
+                    localised_name = newPrototype.localised_name,
                     icons = newPrototype.icons,
                     icon = newPrototype.icon,
                     icon_size = newPrototype.icon_size,
@@ -790,20 +816,23 @@ for name, prototype in pairs(drills) do
                 -- create tech, item, and drill
                 data:extend{ newPrototype, item, tech }
                 data:extend( recipes )
+                data:extend( subgroups )
+                -- register drill for control stage
+                drillRegistry.data[newPrototype.name] = {stack = stack}
                 log("Created " .. newPrototype.name .. " and its recipes for drill" .. name .. "(" .. tier - 1 .. "/" .. maxTier - 1 .. ")")
-
-                -- register speed limit info in mod_data object
-
-                local entry = {}
-                for resource, outputRate in pairs(outputRates) do
-                    local maxItemSpeed = maxItemThroughput / 
-                    (stack and outputRate.outputAdjusted or outputRate.outputUnstacked)
-                    local maxFluidSpeed = maxFluidThroughput / outputRate.outputFluid
-                    -- for hybrid outputs, apply the strictest limit
-                    entry[resource] = math.min(maxItemSpeed, maxFluidSpeed)
-                end
-                drillRegistry.data[newPrototype.name] = entry
             end
         end
     end
+    ::skip_drill::
 end
+
+-- cleanup nonexistent upgrades due to DoD tier limits
+for drill, prototype in pairs(data.raw["mining-drill"]) do
+    if not drills[drill] then
+        if prototype.next_upgrade and not data.raw["mining-drill"][prototype.next_upgrade] then
+            prototype.next_upgrade = nil
+        end
+    end
+end
+
+log("Finished creating Drills of Drills.")
