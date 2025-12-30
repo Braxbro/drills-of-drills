@@ -673,7 +673,11 @@ for name, prototype in pairs(drills) do
                 }
                 -- new name
                 newPrototype.name = item.place_result
-                newPrototype.minable.result = item.name
+                newPrototype.minable = {
+                    mining_time = ((newPrototype.minable or {}).mining_time or 1) * tierScale,
+                    result = item.name,
+                    count = 1
+                }
                 newPrototype.subgroup = "drill-of-" .. name .. "s"
                 newPrototype.order = string.format("%0" .. string.len(tostring(maxTier)) .. "d", tierScale)
                 newPrototype.next_upgrade = newPrototype.next_upgrade
