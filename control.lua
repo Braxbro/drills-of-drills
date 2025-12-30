@@ -54,6 +54,8 @@ script.on_event(defines.events.on_object_destroyed, removeDrillsOfDrills)
 local function getSpeedLimit(drill)
     -- non-Drills of Drills are not speed limited by Drills of Drills.
     if not drillRegistry[drill.name] then return nil end
+    -- don't restrict speed of drills that have yet to select a mining_target.
+    if not drill.mining_target then return nil end
     local speedLimit = speedLimits[drill.mining_target.name]
     local maxItemSpeed
     local maxFluidSpeed = speedLimit.maxFluidSpeed

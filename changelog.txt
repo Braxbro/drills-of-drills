@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.3
+Date: 2025-12-30
+  Bugfixes:
+    - Fixed a crash when a Drill of Drills was placed on the same update as a speed limit check.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.2
 Date: 2025-12-29
   Bugfixes:
