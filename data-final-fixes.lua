@@ -540,15 +540,15 @@ for name, prototype in pairs(drills) do
                     end
                 end
 
-                if fluidIn then
+                if fluidIn and fluidIn.pipe_connections then
                     fixFluidBoxConnections(fluidIn.pipe_connections)
                 end
 
-                if fluidOut then
+                if fluidOut and fluidOut.pipe_connections then
                     fixFluidBoxConnections(fluidOut.pipe_connections)
                 end
 
-                if fluidEnergy then
+                if fluidEnergy and fluidEnergy.pipe_connections then
                     fixFluidBoxConnections(fluidEnergy.pipe_connections)
                 end
 
