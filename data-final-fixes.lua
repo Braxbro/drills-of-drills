@@ -671,6 +671,7 @@ for name, prototype in pairs(drills) do
                 item.localised_name = { "item-name-placeholders.drill-of-drills", tostring(tierSquared),
                     prototype.localised_name or { "entity-name." .. name }
                 }
+                item.hidden = false
                 -- new name
                 newPrototype.name = item.place_result
                 newPrototype.minable = {
@@ -685,6 +686,7 @@ for name, prototype in pairs(drills) do
                 newPrototype.localised_name = { "item-name-placeholders.drill-of-drills", tostring(tierSquared),
                     prototype.localised_name or { "entity-name." .. name }
                 }
+                newPrototype.hidden = true
 
                 -- recipes
                 local nulliusPrefix = mods["nullius"] and "nullius-" or ""
@@ -729,6 +731,7 @@ for name, prototype in pairs(drills) do
                         },
                         energy_required = craftTime,
                         enabled = false,
+                        hidden = false,
                         allow_as_intermediate = false,
                         order = nulliusPrefix ..
                             string.format("%0" .. string.len(tostring(maxTier)) .. "d", tierScale)
@@ -750,6 +753,7 @@ for name, prototype in pairs(drills) do
                     },
                     energy_required = tierSquared / 4,
                     enabled = false,
+                    hidden = false,
                     order = nulliusPrefix ..
                         string.format("%0" .. string.len(tostring(maxTier)) .. "d", tierScale)
                 })
@@ -774,6 +778,7 @@ for name, prototype in pairs(drills) do
                     },
                     energy_required = 2.5 * tierSquared,
                     enabled = false,
+                    hidden = false,
                     allow_as_intermediate = false,
                     allow_intermediates = false,
                     order = nulliusPrefix ..
