@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.4
+Date: 2026-01-03
+  Bugfixes:
+    - Fixed disassembly of Drills of Drills counting towards tech unlocks.
+  Minor Features:
+    - Added option to configure filter count on Drills of Drills, defaulting to 1.
+      This can be disabled by setting the count to 0.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.3
 Date: 2025-12-30
   Bugfixes:

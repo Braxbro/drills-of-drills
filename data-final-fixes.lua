@@ -687,6 +687,11 @@ for name, prototype in pairs(drills) do
                     prototype.localised_name or { "entity-name." .. name }
                 }
                 newPrototype.hidden = true
+                
+                -- setting value is guaranteed to be integer
+                ---@diagnostic disable-next-line: assign-type-mismatch
+                newPrototype.filter_count = 
+                    settings.startup["drills-of-drills-filter-count"].value;
 
                 -- recipes
                 local nulliusPrefix = mods["nullius"] and "nullius-" or ""
@@ -703,14 +708,16 @@ for name, prototype in pairs(drills) do
                                 table.insert(ingredientsTable, { 
                                     type = "item",
                                     name = baseItem, 
-                                    amount = math.floor(drillTotal / (iSquared))
+                                    amount = math.floor(drillTotal / (iSquared)),
+                                    ignored_by_stats = math.floor(drillTotal / (iSquared))
                                 })
-                                craftTime = math.floor(drillTotal / (iSquared)) / 4
+                                craftTime = craftTime + math.floor(drillTotal / (iSquared)) / 4
                             else
                                 table.insert(ingredientsTable, {
                                     type = "item",
                                     name = prefix .. "-" .. baseItem .. "-" .. i - 1, 
-                                    amount = math.floor(drillTotal / (iSquared))
+                                    amount = math.floor(drillTotal / (iSquared)),
+                                    ignored_by_stats = math.floor(drillTotal / (iSquared))
                                 })
                             end
                             drillTotal = drillTotal % (iSquared)
@@ -727,7 +734,7 @@ for name, prototype in pairs(drills) do
                         subgroup = "drill-of-" .. name .. "s-upgrade",
                         ingredients = ingredientsTable,
                         results = {
-                            {type = "item", name = item.name, amount = 1}
+                            {type = "item", name = item.name, amount = 1, ignored_by_stats = 1}
                         },
                         energy_required = craftTime,
                         enabled = false,
@@ -745,11 +752,12 @@ for name, prototype in pairs(drills) do
                         {
                             type = "item",
                             name = baseItem,
-                            amount = tierSquared
+                            amount = tierSquared,
+                            ignored_by_stats = tierSquared
                         }
                     },
                     results = {
-                        {type = "item", name = item.name, amount = 1}
+                        {type = "item", name = item.name, amount = 1, ignored_by_stats = 1}
                     },
                     energy_required = tierSquared / 4,
                     enabled = false,
@@ -770,11 +778,15 @@ for name, prototype in pairs(drills) do
                         {
                             type = "item",
                             name = item.name,
-                            amount = 1
+                            amount = 1,
+                            ignored_by_stats = 1
                         } 
                     },
                     results = {
-                        {type = "item", name = baseItem, amount = tierSquared}
+                        {
+                            type = "item", name = baseItem, 
+                            amount = tierSquared, ignored_by_stats = tierSquared
+                        }
                     },
                     energy_required = 2.5 * tierSquared,
                     enabled = false,
